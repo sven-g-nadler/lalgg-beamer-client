@@ -1,0 +1,46 @@
+{
+  "_comment": "Managed policies for the lal.gg beamer kiosk. Installed to /etc/chromium/policies/managed/lalgg.json. The URL allow-list is the main lockdown: the browser can only reach lal.gg, the Directus asset host and localhost. Add hosts your slides embed (e.g. a video CDN) to URLAllowlist.",
+
+  "URLBlocklist": ["*"],
+  "URLAllowlist": [
+    "lal.gg",
+    "[*.]lal.gg",
+    "lockandload.ch",
+    "[*.]lockandload.ch",
+    "127.0.0.1",
+    "localhost",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "use.typekit.net",
+    "p.typekit.net"
+  ],
+
+  "DeveloperToolsAvailability": 2,
+  "IncognitoModeAvailability": 1,
+  "BrowserSignin": 0,
+  "SyncDisabled": true,
+  "PasswordManagerEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "DownloadRestrictions": 3,
+  "PrintingEnabled": false,
+  "TranslateEnabled": false,
+  "SearchSuggestEnabled": false,
+  "DefaultBrowserSettingEnabled": false,
+  "PromotionsEnabled": false,
+  "MetricsReportingEnabled": false,
+  "BackgroundModeEnabled": false,
+  "AllowFileSelectionDialogs": false,
+  "ExtensionInstallBlocklist": ["*"],
+
+  "AutoplayAllowed": true,
+  "DefaultNotificationsSetting": 2,
+  "DefaultGeolocationSetting": 2,
+  "AudioCaptureAllowed": false,
+  "VideoCaptureAllowed": false,
+  "DefaultPopupsSetting": 2,
+
+  "HomepageLocation": "https://manage.lal.gg/beamer/device",
+  "RestoreOnStartup": 4,
+  "RestoreOnStartupURLs": ["https://manage.lal.gg/beamer/device"]
+}

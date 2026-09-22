@@ -1,0 +1,22 @@
+[Unit]
+Description=lal.gg beamer client agent (outbound management, localhost /info)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/lalgg-beamer/lalgg_agent.py
+Restart=always
+RestartSec=5
+# root is required for DMI serials, reboot, config writes and chvt; everything else is
+# sandboxed. Only loopback is listened on; all cloud traffic is outbound.
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=/etc/lalgg-beamer /var/lib/lalgg-beamer /usr/local/lib/lalgg-beamer
+
+[Install]
+WantedBy=multi-user.target
