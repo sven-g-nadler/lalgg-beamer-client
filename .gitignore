@@ -1,0 +1,12 @@
+# local state / secrets never belong in git
+*.env
+!config/lalgg-beamer.env.example
+*.log
+*.iso
+*.img
+*.img.xz
+build/
+dist/
+__pycache__/
+.DS_Store
+Thumbs.db
