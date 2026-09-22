@@ -8,6 +8,11 @@
 #   3. installs the kiosk launcher, managed Chromium policies, the agent and the console
 #   4. locks the remaining ttys down (PIN console on tty2, nothing else)
 #   5. writes /etc/lalgg-beamer/config.env (management URL, console PIN hash)
+#
+# Non-interactive use (preseed late_command, CI, remote install over ssh without a tty):
+#   LALGG_CONSOLE_PIN=1234 LALGG_MANAGE_URL=https://manage.lal.gg install/install.sh
+# Both are only read on first install (when config.env does not exist yet). Without a
+# PIN and without a terminal the installer aborts instead of writing a config with no PIN.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -81,13 +86,28 @@ printf '%s\n' "$(git -C "$REPO_DIR" describe --tags --always 2>/dev/null || echo
 # ---------------------------------------------------------------------------
 if [ ! -f "$CONF" ]; then
   log "first-time configuration"
-  read -r -p "Management URL [$DEFAULT_MANAGE_URL]: " MANAGE_URL </dev/tty
-  MANAGE_URL="${MANAGE_URL:-$DEFAULT_MANAGE_URL}"
-  while :; do
-    read -r -s -p "Console PIN (4-8 digits): " PIN </dev/tty; echo
-    [[ "$PIN" =~ ^[0-9]{4,8}$ ]] && break
-    echo "PIN must be 4-8 digits."
-  done
+  MANAGE_URL="${LALGG_MANAGE_URL:-$DEFAULT_MANAGE_URL}"
+  PIN="${LALGG_CONSOLE_PIN:-}"
+  if [ -n "$PIN" ]; then
+    [[ "$PIN" =~ ^[0-9]{4,8}$ ]] || die "LALGG_CONSOLE_PIN must be 4-8 digits"
+  elif { : </dev/tty; } 2>/dev/null; then
+    # interactive: ask on the controlling terminal, not stdin (may be a pipe)
+    if [ -z "${LALGG_MANAGE_URL:-}" ]; then
+      read -r -p "Management URL [$DEFAULT_MANAGE_URL]: " MANAGE_URL </dev/tty
+      MANAGE_URL="${MANAGE_URL:-$DEFAULT_MANAGE_URL}"
+    fi
+    while :; do
+      read -r -s -p "Console PIN (4-8 digits): " PIN </dev/tty; echo
+      [[ "$PIN" =~ ^[0-9]{4,8}$ ]] && break
+      echo "PIN must be 4-8 digits."
+    done
+  else
+    die "no terminal and LALGG_CONSOLE_PIN not set: cannot ask for the console PIN"
+  fi
+  case "$MANAGE_URL" in
+    https://*) ;;
+    *) die "management URL must start with https:// (got: $MANAGE_URL)" ;;
+  esac
   PIN_HASH="$(printf '%s' "$PIN" | sha256sum | cut -d' ' -f1)"
   sed -e "s|^MANAGE_URL=.*|MANAGE_URL=$MANAGE_URL|" \
       -e "s|^CONSOLE_PIN_SHA256=.*|CONSOLE_PIN_SHA256=$PIN_HASH|" \
@@ -140,7 +160,10 @@ for n in 3 4 5 6; do systemctl mask "getty@tty$n.service" >/dev/null 2>&1 || tru
 
 # no console blanking, quiet boot
 if [ -f /etc/default/grub ] && ! grep -q consoleblank /etc/default/grub; then
-  sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 consoleblank=0 quiet"/' /etc/default/grub
+  # Debian already ships "quiet"; only add what is missing
+  extra="consoleblank=0"
+  grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=.*\bquiet\b' /etc/default/grub || extra="$extra quiet"
+  sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 $extra\"/" /etc/default/grub
   update-grub >/dev/null 2>&1 || true
 fi
 

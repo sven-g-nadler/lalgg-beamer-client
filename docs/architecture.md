@@ -13,6 +13,9 @@ the box only has to (1) reach the web, (2) show one browser window reliably for 
    `lalgg-console.service` (tty2) and `getty@tty1` with autologin for `kiosk`.
 2. `kiosk`'s `~/.bash_profile` `exec`s `start-kiosk.sh` on tty1.
 3. `start-kiosk.sh` loops forever: `cage -- chromium --kiosk <MANAGE_URL>/beamer/device`.
+   It runs as `kiosk` and cannot read `config.env` (root-only, holds the device token), so
+   it fetches the URL and the `KIOSK_*` settings from the agent's `/info` (`kiosk` block)
+   on every restart, falling back to defaults if the agent is not up.
    If Chromium or cage dies, the loop restarts them after 3 s.
 4. The page loads from lal.gg and calls `http://127.0.0.1:8484/info`.
    - Not enrolled → it renders the pairing screen (code from the agent).
@@ -50,7 +53,7 @@ desktop environment. The installed footprint is ~600 MB on top of a netinst Debi
 /etc/lalgg-beamer/config.env        settings + device token (0600 root)
 /var/lib/lalgg-beamer/chromium/     browser profile + 2 GB disk cache (kiosk user)
 /var/lib/lalgg-beamer/pairing_secret  only while unenrolled
-/var/lib/lalgg-beamer/kiosk.log     last 2000 lines of session restarts
+journalctl -t lalgg-kiosk           session output and restarts (kiosk user cannot write to the state dir)
 /usr/local/lib/lalgg-beamer/        the installed scripts + VERSION
 ```
 

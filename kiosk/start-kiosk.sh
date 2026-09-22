@@ -4,14 +4,30 @@
 # relaunches the whole session whenever it exits: a browser crash costs ~3 s of black.
 set -u
 
-CONF=/etc/lalgg-beamer/config.env
-STATE_DIR=/var/lib/lalgg-beamer
-MANAGE_URL="https://manage.lal.gg"
-[ -r "$CONF" ] && . "$CONF"                     # MANAGE_URL, KIOSK_EXTRA_FLAGS, ...
+# Everything the session prints goes to the journal (journalctl -t lalgg-kiosk): the
+# state dir is root-owned and journald handles rotation on a box that runs for months.
+exec > >(systemd-cat -t lalgg-kiosk) 2>&1
 
-# Where the browser lands. The agent exposes device identity on localhost; the
-# lal.gg page detects that and shows the pairing code instead of a plain player.
-START_URL="${KIOSK_START_URL:-$MANAGE_URL/beamer/device}"
+STATE_DIR=/var/lib/lalgg-beamer
+INFO_URL=http://127.0.0.1:8484/info
+
+# Settings come from the agent, not from config.env: that file is root-only because it
+# holds the device token, and this script runs as the unprivileged kiosk user. The agent
+# publishes the non-secret subset under "kiosk" in /info. Re-read on every restart so a
+# URL changed from lal.gg or the console takes effect with the next browser restart.
+# Defaults apply if the agent is not up (yet).
+load_settings() {
+  START_URL="https://manage.lal.gg/beamer/device"
+  KIOSK_EXTRA_FLAGS=""
+  KIOSK_ALLOW_VT_SWITCH=1
+  local info tries=0
+  until info="$(curl -sf -m 2 "$INFO_URL")" || [ $((++tries)) -ge 10 ]; do sleep 1; done
+  [ -n "${info:-}" ] || { echo "agent not reachable at $INFO_URL, using defaults"; return; }
+  START_URL="$(jq -r '.kiosk.start_url // empty' <<<"$info")"
+  KIOSK_EXTRA_FLAGS="$(jq -r '.kiosk.extra_flags // empty' <<<"$info")"
+  [ "$(jq -r '.kiosk.allow_vt_switch' <<<"$info")" = "true" ] || KIOSK_ALLOW_VT_SWITCH=0
+  [ -n "$START_URL" ] || START_URL="https://manage.lal.gg/beamer/device"
+}
 
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export XDG_SESSION_TYPE=wayland
@@ -35,24 +51,23 @@ CHROMIUM_FLAGS=(
   --password-store=basic
   --check-for-update-interval=31536000
   --disk-cache-dir="$STATE_DIR/chromium/cache"
-  --disk-cache-size=2147483648
+  --disk-cache-size=2147483647   # must fit int32; Chromium ignores the flag otherwise
   --enable-features=VaapiVideoDecodeLinuxGL
   --ignore-gpu-blocklist
-  ${KIOSK_EXTRA_FLAGS:-}
 )
 
 while :; do
+  load_settings
   # `cage` without -s: no VT switching from inside the session. The PIN console
   # lives on tty2 and is reached via the agent's "console" command or Alt+F2 only
   # when KIOSK_ALLOW_VT_SWITCH=1 (default: 1, so a technician can get to the PIN).
   CAGE_FLAGS=(-d)
-  [ "${KIOSK_ALLOW_VT_SWITCH:-1}" = "1" ] && CAGE_FLAGS+=(-s)
+  [ "$KIOSK_ALLOW_VT_SWITCH" = "1" ] && CAGE_FLAGS+=(-s)
 
-  cage "${CAGE_FLAGS[@]}" -- chromium "${CHROMIUM_FLAGS[@]}" "$START_URL" \
-    >>"$STATE_DIR/kiosk.log" 2>&1
+  echo "starting kiosk: $START_URL ${KIOSK_EXTRA_FLAGS:+(extra flags: $KIOSK_EXTRA_FLAGS)}"
+  # shellcheck disable=SC2086  # extra flags are intentionally word-split
+  cage "${CAGE_FLAGS[@]}" -- chromium "${CHROMIUM_FLAGS[@]}" $KIOSK_EXTRA_FLAGS "$START_URL"
   rc=$?
-  printf '%s kiosk session ended (rc=%s), restarting\n' "$(date -Is)" "$rc" >>"$STATE_DIR/kiosk.log"
-  # keep the log from growing forever on a box that runs for months
-  tail -n 2000 "$STATE_DIR/kiosk.log" > "$STATE_DIR/kiosk.log.tmp" && mv "$STATE_DIR/kiosk.log.tmp" "$STATE_DIR/kiosk.log"
+  printf 'kiosk session ended (rc=%s), restarting in 3 s\n' "$rc"
   sleep 3
 done

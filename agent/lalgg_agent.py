@@ -154,11 +154,17 @@ def hardware():
     for line in _read("/proc/meminfo").splitlines():
         if line.startswith("MemTotal"):
             mem_kb = int(line.split()[1])
+    # x86 lists a numeric "model : 140" before "model name"; Pi has "model name" per core
+    # (armv7) or only a trailing "Model : Raspberry Pi 4 ..." line (arm64). Prefer the name.
     cpu = ""
     for line in _read("/proc/cpuinfo").splitlines():
-        if line.lower().startswith(("model name", "model")):
-            cpu = line.split(":", 1)[1].strip()
+        key, _, val = line.partition(":")
+        key = key.strip().lower()
+        if key == "model name":
+            cpu = val.strip()
             break
+        if key == "model" and not val.strip().isdigit():
+            cpu = val.strip()
     temp = _read("/sys/class/thermal/thermal_zone0/temp")
     # x86: DMI/SMBIOS via sysfs (root-readable). Raspberry Pi: device tree instead.
     dt_model = _read("/proc/device-tree/model").replace("\x00", "")
@@ -198,6 +204,13 @@ def info(conf):
         "directus_url": conf["DIRECTUS_URL"],
         "capabilities": ["reboot", "restart-browser", "update", "displays", "console"],
         "hardware": hardware(),
+        # Non-secret settings for start-kiosk.sh, which runs as 'kiosk' and must not read
+        # config.env (it holds DEVICE_TOKEN). Fetched from localhost at every session start.
+        "kiosk": {
+            "start_url": conf.get("KIOSK_START_URL") or conf["MANAGE_URL"].rstrip("/") + "/beamer/device",
+            "extra_flags": conf.get("KIOSK_EXTRA_FLAGS", ""),
+            "allow_vt_switch": conf.get("KIOSK_ALLOW_VT_SWITCH", "1") == "1",
+        },
     }
     if not enrolled:
         doc["pairing"] = {"code": pairing_code(fp), "secret": pairing_secret()}

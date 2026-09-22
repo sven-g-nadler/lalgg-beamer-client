@@ -11,7 +11,9 @@ no third-party fleet service.
 
 > **Status: v0.1 pre-alpha.** Installer, kiosk session, local console and agent exist and
 > are meant to be tested in a VM first. The device API on the lal.gg side is a
-> *proposal* (see [`docs/device-api.md`](docs/device-api.md)) and does not exist yet.
+> *proposal* (see [`docs/device-api.md`](docs/device-api.md)) and does not exist yet; the
+> same goes for the `manage.lal.gg` hostname used as the default everywhere. Until it is
+> live, set `KIOSK_START_URL` in `/etc/lalgg-beamer/config.env` to test the kiosk.
 
 ## How it works
 
@@ -57,6 +59,10 @@ reboot
 
 The installer asks for a console PIN and the management URL (default
 `https://manage.lal.gg`). On reboot the box shows the pairing screen.
+
+Unattended (preseed, CI, `ssh` without a tty): pass both as environment variables instead,
+`LALGG_CONSOLE_PIN=1234 LALGG_MANAGE_URL=https://manage.lal.gg install/install.sh`. They are
+only read on the first run; an existing `/etc/lalgg-beamer/config.env` is never overwritten.
 
 **Test it in a VM first**: Hyper-V or VirtualBox with a plain Debian netinst, EFI on,
 2 GB RAM. Everything works there except hardware video decoding.

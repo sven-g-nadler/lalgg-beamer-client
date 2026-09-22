@@ -40,7 +40,5 @@
   "VideoCaptureAllowed": false,
   "DefaultPopupsSetting": 2,
 
-  "HomepageLocation": "https://manage.lal.gg/beamer/device",
-  "RestoreOnStartup": 4,
-  "RestoreOnStartupURLs": ["https://manage.lal.gg/beamer/device"]
+  "_comment_startup": "No HomepageLocation/RestoreOnStartupURLs here: start-kiosk.sh passes the URL on the command line; a hard-coded policy URL would override a changed MANAGE_URL."
 }
